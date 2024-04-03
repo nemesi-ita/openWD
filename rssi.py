@@ -75,59 +75,7 @@ def trilateration_process(rssi_measurements, anchor_positions):
         print(f"Calcolo {d}: ", end='')
         distanza = 10**((rssi0-d)/(10*ple))
         print(distanza)
-    '''
-    # Supponiamo che "anchor" sia una lista di tuple contenenti le coordinate (x, y) dei punti di ancoraggio
-    # e "distances" sia una lista contenente le distanze misurate dai punti di ancoraggio all'oggetto
-    
-    # Assicuriamoci che ci siano abbastanza coordinate di ancoraggio e distanze
-    if len(anchor) < 3 or len(distances) < 3:
-        print("Non ci sono abbastanza punti di ancoraggio o distanze per eseguire la trilaterazione.")
-        return None
-    
-    # Estraiamo le coordinate x e y dei punti di ancoraggio
-    xa, ya = anchor[0]
-    xb, yb = anchor[1]
-    xc, yc = anchor[2]
-    
-    # Estraiamo le distanze misurate
-    ra, rb, rc = distances[0], distances[1], distances[2]
-    
-    # Calcoliamo le differenze di coordinate tra i punti di ancoraggio
-    #dx1 = xb - xa
-    #dy1 = yb - ya
-    #dx2 = xc - xa
-    #dy2 = yc - ya
-    # Calcola le differenze di coordinate tra i punti di ancoraggio (utilizzando valori assoluti)
-    dx1 = abs(xb - xa)
-    dy1 = abs(yb - ya)
-    dx2 = abs(xc - xa)
-    dy2 = abs(yc - ya)
-    
-    # Calcoliamo la differenza tra le distanze misurate al quadrato
-    dr1_sq = rb**2 - ra**2
-    dr2_sq = rc**2 - ra**2
-    
-    # Calcoliamo il coefficiente della formula di trilaterazione
-    D = 2 * (dx1 * dy2 - dx2 * dy1)
-    print("D --> ", D)
-    # Calcoliamo le coordinate x e y dell'oggetto
-    x = (dr1_sq * dy2 - dr2_sq * dy1) / D
-    y = (dr2_sq * dx1 - dr1_sq * dx2) / D
-    
-    return x, y
-
-def calculate(anchor, rssi_values):
-    # Assicuriamoci che ci siano abbastanza coordinate di ancoraggio e RSSI
-    print(rssi_values)
-    if len(anchor) < 3 or len(rssi_values) < 3:
-        print("Non ci sono abbastanza punti di ancoraggio o RSSI per eseguire la trilaterazione.")
-        return None
-    
-    # Mappa RSSI ai valori di distanza utilizzando un modello di propagazione empirico
-    distances = rssi_values #map_rssi_to_distance(rssi_values)
-    
-    # Esegui la trilaterazione con le distanze calcolate
-    return trilaterate(anchor, distances)'''
+        
 
 IP = "192.168.1.100"
 PORT = 2947

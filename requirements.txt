@@ -1,0 +1,3 @@
+pywifi
+numpy
+scikit-learn
