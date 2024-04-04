@@ -17,7 +17,8 @@ from sklearn.linear_model import LinearRegression
 from statistics import mean
 
 anchor = [[] for _ in range(3)]         # mia posizione gps
-network_signals = {}    # dizionario che contiene {"ssid", [rssi1, rssi2, rssi3]}
+network_signals = {}    # dizionario che contiene {"ssid": [rssi1, rssi2, rssi3]}
+network_positions = {}  # dizionario che contiene {"ssid": distanza}
 
 
 # Trovo le corrispondenze gps
@@ -75,39 +76,9 @@ def start_WIFI():
 
     return wifi_interface
 
-# Avvio la ricerca dei wifi
-def scan_wifi(iface):
-    iface.scan()  # Start scanning for WiFi networks
-    scan_results = iface.scan_results()
 
-    print("WiFi networks found:")
-    # Aggiungere un dizionario per tenere traccia delle reti e del RSSI
-    for network in scan_results:
-        print("SSID:", network.ssid, "Signal Strength:", network.signal)
-        signals = []    # sengali RSSI
-        axy = []        # array x, y
-
-        for i in range(3):
-            parsed_data = None
-            signals.append(network_signal)
-
-            while parsed_data is None:
-                data, addr = s.recvfrom(2048)
-                parsed_data = parse_nmea(data.decode())
-            # if parsed_data:
-            x, y = parsed_data
-            anchor[i] = (x, y)  # aggiungo l'ancora con le mie coordinate attuali
-            sleep(1)
-
-        network_signals.update({network.ssid: signals}) # aggiorno le potenze
-
-# PARAMETERS
-'''
-rssix[] --> Rssi ricevuti
-positions[] --> Le mie posizioni (ancore)
-
-'''
 def trilateration_process(rssi_measurements, anchor_positions):
+    distance = None
     # Dati di esempio
     #anchor_positions = np.array([[49, 51], [49, 51], [49, 51]])  # Posizioni delle 3 ancore
     #rssi_measurements = np.array([[-40, -37, -41]])  # Misurazioni RSSI (esempio con un singolo set di misurazioni)
@@ -134,8 +105,42 @@ def trilateration_process(rssi_measurements, anchor_positions):
     # Uso la formula log-distanza
     for d in rssi_measurements:
         print(f"Calcolo {d}: ", end='')
-        distanza = 10**((rssi0-d)/(10*ple))
-        print(distanza)
+        distance = 10**((rssi0-d)/(10*ple))
+        print(distance)
+    
+    return distance
+
+# Avvio la ricerca dei wifi
+def scan_wifi(iface, s):
+    iface.scan()  # Start scanning for WiFi networks
+    scan_results = iface.scan_results()
+
+    print("WiFi networks found:")
+    # Aggiungere un dizionario per tenere traccia delle reti e del RSSI
+    for network in scan_results:
+        signals = []    # sengali RSSI
+        axy = []        # array x, y
+
+        # Print new networks
+        if network.ssid not in network_signals.keys():
+            print("SSID:", network.ssid, "Signal Strength:", network.signal)
+
+        for i in range(3):
+            parsed_data = None
+            signals.append(network.signal)
+
+            while parsed_data is None:
+                data, addr = s.recvfrom(2048)
+                parsed_data = parse_nmea(data.decode())
+            # if parsed_data:
+            x, y = parsed_data
+            anchor[i] = (x, y)  # aggiungo l'ancora con le mie coordinate attuali
+            sleep(1)
+
+        network_signals.update({network.ssid: signals}) # aggiorno le potenze
+        distance = trilateration_process(np.array(network_signals.get(network.ssid)), np.array(anchor))
+        network_positions.update({network.ssid: distance})
+
         
 
 
@@ -222,6 +227,7 @@ def init():
 
         UDP_IP = args.address
         UDP_PORT = args.port
+
         # Configura il socket UDP
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((UDP_IP, UDP_PORT))
@@ -235,7 +241,7 @@ def init():
     print(f"In ascolto sul socket: {args.address}:{args.port}\nIn attesa di dati da GPSDForwarder...")
 
     while True:
-        scan_wifi(iface)
+        scan_wifi(iface, sock)
         '''
         try:
             # Ricevi i dati GPS (ASYNC)
@@ -253,7 +259,6 @@ def init():
             #exportData()
             break
         '''
-        trilateration_process(np.array(network_signals.get(network.ssid)), np.array(anchor)) 
 
 if __name__ == "__main__":
     try:
