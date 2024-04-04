@@ -1,3 +1,5 @@
+# https://github.com/awkman/pywifi/blob/master/DOC.md
+
 import pywifi
 import math
 import socket
@@ -6,13 +8,17 @@ import re
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from statistics import mean
+import argparse
+import os
+import sys
 
 def start():
     wifi = pywifi.PyWiFi()
     interfaces = wifi.interfaces()
-    print(interfaces[0])
+    #print(interfaces[0])
     for i in interfaces:
         print(i)
+        pass
 
     return interfaces[0]
 
@@ -77,8 +83,25 @@ def trilateration_process(rssi_measurements, anchor_positions):
         print(distanza)
         
 
+# Creazione e gestione argomenti da linea di comando
+parser = argparse.ArgumentParser(usage=f"python3 {os.path.basename(sys.argv[0])} [-h/--help] -n/--network ", 
+				description='Visualizza e traccia la tua rete wifi  ;)', 
+                            	#add_help=False,
+                            	epilog="Il telefono/trasmettitore NMEA e dispositivo di wardriving devono essere sulla stessa rete!")
+
+parser.add_argument('-n', '--network', nargs="?", default=None, type=str, metavar="network", dest="network", 
+                        help='Nome rete')
+
+args = parser.parse_args()
+
 IP = "192.168.1.100"
 PORT = 2947
+
+NETWORK = str(args.network)
+if NETWORK is None:
+    print("***ERRORE***\nNon e' stata selezionata una rete!")
+    exit(1)
+
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((IP, PORT))
 
@@ -86,6 +109,7 @@ iface = start()
 
 
 iface.scan()  # Start scanning for WiFi networks
+sleep(2)
 scan_results = iface.scan_results()
 
 anchor = [[] for _ in range(3)]         # mia posizione gps
@@ -93,47 +117,64 @@ network_signals = {}    # dizionario che contiene {"ssid", [rssi1, rssi2, rssi3]
 # Ricevi i dati
 
 for network in scan_results:
-    signals = []    # array segnali RSSI
-    axy = []        # array x,y
-    if network.ssid == "FASTWEB-1-5968F3":
-        print("SSID:", network.ssid, "Signal Strength:", network.signal)
-
-        # Salvo le tre potenze (in 3 punti diversi)
-        for i in range(3):
-            parsed_data = None
-            signals.append(network.signal)
-
-            while parsed_data is None:
-                data, addr = s.recvfrom(2048)
-                parsed_data = parse_nmea(data.decode())
-                
-            print(parsed_data)
-
-
-            if parsed_data:
-                x, y = parsed_data
-                anchor[i] = (x, y)  # Assegna le coordinate (x, y) a anchor[i]
-                #print(anchor[i])
-            sleep(2)
-
-
-        network_signals.update({network.ssid: signals}) # Aggiorno le potenze
-
-        # Output
-        '''
-        print("Ancore: ")
-        for i in anchor:
-            print(i)
-        
-        for j in network_signals.values():
-            for i in j:
-                print(i)
-        '''
-        # Trilaterazione
-        print(f'''
-        RSSI --> {np.array(network_signals.get(network.ssid))}
-        ANCORE --> {np.array(anchor)}
-        ''')
-        trilateration_process(np.array(network_signals.get(network.ssid)), np.array(anchor)) 
-
+    try:
+        #print("n-->", network.ssid)
+        if NETWORK == network.ssid:
+            NETWORK = scan_results[scan_results.index(network)]
+            print(f"N --> {NETWORK}")
+    except AttributeError:
         break
+signals = []    # array segnali RSSI
+axy = []        # array x,y
+
+#if network.ssid == str(NETWORK):
+print("SSID:", network.ssid, "Signal Strength:", network.signal)
+
+# Salvo le tre potenze (in 3 punti diversi)
+for i in range(3):
+    parsed_data = None
+
+    # Obtain new data
+    iface.scan()
+    sleep(2)
+    result = iface.scan_results()
+
+    signals.append(result.signal)
+    print(signals)
+
+    while parsed_data is None:
+        data, addr = s.recvfrom(2048)
+        parsed_data = parse_nmea(data.decode())
+        
+    print(parsed_data)
+
+
+    if parsed_data:
+        x, y = parsed_data
+        anchor[i] = (x, y)  # Assegna le coordinate (x, y) a anchor[i]
+        #print(anchor[i])
+    sleep(2)
+
+
+network_signals.update({network.ssid: signals}) # Aggiorno le potenze
+
+# Output
+'''
+print("Ancore: ")
+for i in anchor:
+    print(i)
+
+for j in network_signals.values():
+    for i in j:
+        print(i)
+'''
+# Trilaterazione
+print(f'''
+RSSI --> {np.array(network_signals.get(network.ssid))}
+ANCORE --> {np.array(anchor)}
+''')
+trilateration_process(np.array(network_signals.get(network.ssid)), np.array(anchor)) 
+'''
+else:
+        print("Nessuna rete trovata")
+'''
