@@ -94,7 +94,7 @@ parser.add_argument('-n', '--network', nargs="?", default=None, type=str, metava
 
 args = parser.parse_args()
 
-IP = "192.168.1.100"
+IP = "192.168.43.144"
 PORT = 2947
 
 NETWORK = str(args.network)
@@ -107,41 +107,40 @@ s.bind((IP, PORT))
 
 iface = start()
 
+def scanNet():
+    iface.scan()
+    sleep(2)
+    scan_results = iface.scan_results()
+    
+    # Remove
+    for net in scan_results:
+        print(net)
+        while net.signal is not None:
+            if net.ssid == NETWORK:
+                print(net.signal)
+                return net.signal
+            else:
+                break
 
-iface.scan()  # Start scanning for WiFi networks
-sleep(2)
-scan_results = iface.scan_results()
 
 anchor = [[] for _ in range(3)]         # mia posizione gps
 network_signals = {}    # dizionario che contiene {"ssid", [rssi1, rssi2, rssi3]}
-# Ricevi i dati
 
-for network in scan_results:
-    try:
-        #print("n-->", network.ssid)
-        if NETWORK == network.ssid:
-            NETWORK = scan_results[scan_results.index(network)]
-            print(f"N --> {NETWORK}")
-    except AttributeError:
-        break
 signals = []    # array segnali RSSI
 axy = []        # array x,y
-
-#if network.ssid == str(NETWORK):
-print("SSID:", network.ssid, "Signal Strength:", network.signal)
 
 # Salvo le tre potenze (in 3 punti diversi)
 for i in range(3):
     parsed_data = None
 
     # Obtain new data
-    iface.scan()
-    sleep(2)
-    result = iface.scan_results()
+    strength = scanNet()
 
-    signals.append(result.signal)
+    # Salvo potenza nel momento X
+    signals.append(strength)
     print(signals)
-
+    
+    # Ricevo posizione GPS
     while parsed_data is None:
         data, addr = s.recvfrom(2048)
         parsed_data = parse_nmea(data.decode())
@@ -156,7 +155,7 @@ for i in range(3):
     sleep(2)
 
 
-network_signals.update({network.ssid: signals}) # Aggiorno le potenze
+network_signals.update({NETWORK: signals}) # Aggiorno le potenze della rete
 
 # Output
 '''
@@ -170,10 +169,10 @@ for j in network_signals.values():
 '''
 # Trilaterazione
 print(f'''
-RSSI --> {np.array(network_signals.get(network.ssid))}
+RSSI --> {np.array(network_signals.get(NETWORK))}
 ANCORE --> {np.array(anchor)}
 ''')
-trilateration_process(np.array(network_signals.get(network.ssid)), np.array(anchor)) 
+trilateration_process(np.array(network_signals.get(NETWORK)), np.array(anchor)) 
 '''
 else:
         print("Nessuna rete trovata")
