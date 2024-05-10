@@ -5,7 +5,6 @@
 import socket
 import re
 import pywifi
-from pywifi import const
 from time import sleep
 import argparse
 import os.path
@@ -13,12 +12,10 @@ import sys
 import subprocess
 import math
 import numpy as np
-from sklearn.linear_model import LinearRegression
-from statistics import mean
 
 anchor = [[] for _ in range(3)]         # mia posizione gps
-network_signals = {}    # dizionario che contiene {"ssid": [rssi1, rssi2, rssi3]}
-network_positions = {}  # dizionario che contiene {"ssid": distanza}
+network_signals = {}    # dizionario che contiene {"ssid": rssi_max}
+network_positions = {}  # dizionario che contiene {"ssid": (posizione, distanza_minima)}
 
 
 # Trovo le corrispondenze gps
@@ -77,72 +74,52 @@ def start_WIFI():
     return wifi_interface
 
 
-def trilateration_process(rssi_measurements, anchor_positions):
-    distance = None
-    # Dati di esempio
-    #anchor_positions = np.array([[49, 51], [49, 51], [49, 51]])  # Posizioni delle 3 ancore
-    #rssi_measurements = np.array([[-40, -37, -41]])  # Misurazioni RSSI (esempio con un singolo set di misurazioni)
-    ple = 2.0  # Path Loss Exponent
-    #rssi0 = -30  # Valore di riferimento del segnale RSSI a una distanza di riferimento
-    rssi0 = mean(rssi_measurements)
-    # Calcola le distanze stimare utilizzando il modello log-distanza
-    estimated_distances = 10 ** ((rssi0 - rssi_measurements) / (10 * ple))
+def distance_calc(rssi, tx_power, attenuazione):
+    # Calcola la distanza utilizzando la formula di calcolo della distanza RSSI
+    # rssi: Potenza del segnale RSSI ricevuta
+    # tx_power: Potenza di trasmissione del router (misurata in dBm)
+    # attenuazione: Esponente di attenuazione del percorso, solitamente tra 2 e 4 (dipende dall'ambiente)
     
-    # Calibra il modello log-distanza utilizzando una regressione lineare
-    X = anchor_positions  # Posizioni delle ancore come variabili indipendenti
-    y = estimated_distances.reshape(-1, 1)  # Distanze stimare come target
-    regressor = LinearRegression().fit(X, y)
+    # Calcola la distanza in metri
+    distanza = 10 ** ((tx_power - rssi) / (10 * attenuazione))
 
-    # Stampa i coefficienti della regressione
-    # Notare se il coefficiente varia (ci deve essere variazione nelle posizioni per il modello)
-    print("Coefficiente del modello:", regressor.coef_)
-    print("Intercezione del modello:", regressor.intercept_)
-    
+    # Equazione di Friis
+    #distanza = 10 ** ((tx_power - rssi) / (20 * attenuazione))
+    return distanza
 
-    # Ora puoi utilizzare il modello calibrato per stimare le distanze in base ai segnali RSSI misurati
-    # Ad esempio, se hai nuove misurazioni RSSI, puoi usarle per stimare le distanze utilizzando il modello
-
-    # Uso la formula log-distanza
-    for d in rssi_measurements:
-        print(f"Calcolo {d}: ", end='')
-        distance = 10**((rssi0-d)/(10*ple))
-        print(distance)
-    
-    return distance
 
 # Avvio la ricerca dei wifi
 def scan_wifi(iface, s):
+    attenuazione = 2
     iface.scan()  # Start scanning for WiFi networks
     scan_results = iface.scan_results()
-
+    sleep(2)
+    
+    if not scan_results:
+        print("Nessuna rete trovata...")
+        return None
+    
     print("WiFi networks found:")
-    # Aggiungere un dizionario per tenere traccia delle reti e del RSSI
+
+    # sistemare ricezione di NMEA
+    # capire se esiste un metodo per rssi e potenza
     for network in scan_results:
-        signals = []    # sengali RSSI
-        axy = []        # array x, y
+        ssid = network.ssid
+        rssi =  network.signal
+        potenza = -50     # Media dei router commerciali
+        distance = distance_calc(rssi, potenza, attenuazione)
 
-        # Print new networks
-        if network.ssid not in network_signals.keys():
-            print("SSID:", network.ssid, "Signal Strength:", network.signal)
+        if network_signals.get(ssid) is None or rssi > network_signals.get(ssid)[0]:
+            network_signals.update({ssid: (rssi, potenza)}) # aggiorno le potenze
 
-        for i in range(3):
-            parsed_data = None
-            signals.append(network.signal)
+        parsed_position = None
+        while parsed_position is None:
+            data, addr = s.recvfrom(2048)
+            parsed_position = parse_nmea(data.decode())
+        network_positions.update({ssid: (parsed_position, distance)})
 
-            while parsed_data is None:
-                data, addr = s.recvfrom(2048)
-                parsed_data = parse_nmea(data.decode())
-            # if parsed_data:
-            x, y = parsed_data
-            anchor[i] = (x, y)  # aggiungo l'ancora con le mie coordinate attuali
-            sleep(1)
-
-        network_signals.update({network.ssid: signals}) # aggiorno le potenze
-        distance = trilateration_process(np.array(network_signals.get(network.ssid)), np.array(anchor))
-        network_positions.update({network.ssid: distance})
-
-        
-
+        print(f"RETE --> {ssid}\nPotenza alle coordinate {network_positions.get(ssid)[0]} --> {network_signals.get(ssid)[0]}\nDistanza approssimata --> {network_positions.get(ssid)[1]}")
+        sleep(0.5)
 
 def init():
     print('''
