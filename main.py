@@ -11,9 +11,7 @@ import os.path
 import sys
 import subprocess
 import math
-import numpy as np
 
-anchor = [[] for _ in range(3)]         # mia posizione gps
 network_signals = {}    # dizionario che contiene {"ssid": rssi_max}
 network_positions = {}  # dizionario che contiene {"ssid": (posizione, distanza_minima)}
 
@@ -81,10 +79,10 @@ def distance_calc(rssi, tx_power, attenuazione):
     # attenuazione: Esponente di attenuazione del percorso, solitamente tra 2 e 4 (dipende dall'ambiente)
     
     # Calcola la distanza in metri
-    distanza = 10 ** ((tx_power - rssi) / (10 * attenuazione))
+    #distanza = 10 ** ((tx_power - rssi) / (10 * attenuazione))
 
     # Equazione di Friis
-    #distanza = 10 ** ((tx_power - rssi) / (20 * attenuazione))
+    distanza = 10 ** ((tx_power - rssi) / (20 * attenuazione))
     return distanza
 
 
@@ -118,7 +116,9 @@ def scan_wifi(iface, s):
             parsed_position = parse_nmea(data.decode())
         network_positions.update({ssid: (parsed_position, distance)})
 
-        print(f"RETE --> {ssid}\nPotenza alle coordinate {network_positions.get(ssid)[0]} --> {network_signals.get(ssid)[0]}\nDistanza approssimata --> {network_positions.get(ssid)[1]}")
+        print(f'''RETE --> {ssid}
+              Potenza alle coordinate {network_positions.get(ssid)[0]} --> {network_signals.get(ssid)[0]}
+              Distanza approssimata --> {network_positions.get(ssid)[1]}''')
         sleep(0.5)
 
 def init():
